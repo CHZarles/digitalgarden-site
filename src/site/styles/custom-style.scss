@@ -1,0 +1,60 @@
+body {
+    /***
+      ADD YOUR CUSTOM STYLING HERE. (INSIDE THE body {...} section.)
+      IT WILL TAKE PRECEDENCE OVER THE STYLING IN THE STYLE.CSS FILE.
+   ***/
+    //  background-color: white;
+    //  .content {
+    //   font-size: 14px;
+    //  }
+    //  h1 {
+    //   color: black;
+    //  }
+}
+
+// Keep the light theme readable when an Obsidian theme and the garden
+// template provide different color variable sets.
+body.theme-light {
+    --text-normal: #202124;
+    --text-muted: #5f6368;
+    --text-faint: #70757a;
+    --text-accent: #4355a5;
+    --text-accent-hover: #30418f;
+    --link-color: #4355a5;
+    --link-color-hover: #30418f;
+    --background-primary: #ffffff;
+    --background-primary-alt: #f8f9fb;
+    --background-secondary: #f1f3f4;
+    --background-secondary-alt: #e8eaed;
+    --background-modifier-border: #d9dce1;
+    --background-modifier-border-hover: #c3c7ce;
+}
+
+body.theme-light h1,
+body.theme-light h2,
+body.theme-light h3,
+body.theme-light h4,
+body.theme-light h5,
+body.theme-light h6 {
+    color: var(--text-normal);
+}
+
+body.theme-light .filetree-sidebar,
+body.theme-light .sidebar {
+    color: var(--text-muted);
+}
+
+body.theme-light .filetree-sidebar a,
+body.theme-light .sidebar a {
+    color: var(--text-normal);
+}
+
+body.theme-light .filetree-sidebar a:hover,
+body.theme-light .sidebar a:hover {
+    color: var(--text-accent-hover);
+}
+
+body.theme-light pre {
+    background: #f5f6f8;
+    color: #202124;
+}

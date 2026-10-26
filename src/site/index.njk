@@ -1,0 +1,12 @@
+<div class="dg-fallback-index">
+  <h1>CUDA 笔记</h1>
+  {% if publishedNotes.length > 0 %}
+    <ul class="dg-fallback-index-list">
+      {% for note in publishedNotes %}
+        <li><a class="internal-link" href="{{ note.url }}">{{ note.title }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="dg-fallback-index-intro">CUDA 笔记整理中。</p>
+  {% endif %}
+</div>
