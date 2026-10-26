@@ -13,6 +13,7 @@
         "get-theme": "node src/site/get-theme.js",
         "build": "npm-run-all get-theme --parallel build:eleventy build:sass",
         "build:pages": "cross-env SITE_PATH_PREFIX=/digitalgarden-site npm run build && cross-env SITE_PATH_PREFIX=/digitalgarden-site node scripts/prefix-pages.mjs",
+        "sync:cuda": "node scripts/sync-cuda.mjs",
         "test": "vitest run --exclude \"src/plugins/!(dg-*)/**\""
     },
     "keywords": [],

@@ -237,6 +237,10 @@ const markdownFileTypeRegex = /\.(md|markdown)$/i;
 const isMarkdownPage = (inputPath) => inputPath && inputPath.match(markdownFileTypeRegex);
 
 module.exports = function(eleventyConfig) {
+  // The public repository ignores all exported notes except /AI/CUDA.
+  // Eleventy's gitignore reader does not preserve those nested exceptions.
+  // The prebuild scope check enforces the allowlist before rendering.
+  eleventyConfig.setUseGitIgnore(false);
   eleventyConfig.setLiquidOptions({
     dynamicPartials: true,
   });
