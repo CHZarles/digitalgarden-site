@@ -73,45 +73,108 @@ GPU 将 Block 分配给 SM。Block 的执行顺序没有保证。Grid 很大时�
 
 ## 3. 每个 Thread 怎样找到自己的数据
 
-CUDA 提供四组内建变量：[2]
+这一节只解决一个问题：**一个 Thread 怎样根据自己的坐标，找到它负责的数据位置？**
 
-| 变量 | 表示什么 | 在哪里相同 |
+CUDA 给每个 Thread 提供四组内建变量。它们分别描述 Thread 的位置和整个执行范围：[2]
+
+### 3.1 先认识四组内建变量
+
+| 变量 | 描述 | 变化范围或相同范围 |
 |---|---|---|
-| `threadIdx` | Thread 在 Block 内的坐标 | 不同 Block 可以重复 |
-| `blockIdx` | Block 在 Grid 内的坐标 | 同一 Block 内相同 |
-| `blockDim` | Block 的尺寸 | 同一次启动内相同 |
-| `gridDim` | Grid 的尺寸 | 同一次启动内相同 |
+| `threadIdx` | Thread 在当前 Block 内的坐标 | 不同 Block 可以重复；同一 Block 内各 Thread 不同 |
+| `blockIdx` | Block 在当前 Grid 内的坐标 | 同一 Block 内相同；不同 Block 通常不同 |
+| `blockDim` | 一个 Block 在各方向的 Thread 数 | 同一次 Kernel 启动内相同 |
+| `gridDim` | 一个 Grid 在各方向的 Block 数 | 同一次 Kernel 启动内相同 |
 
-对于一维数据，Thread 可以计算全局索引：
+这些变量都有 `.x`、`.y`、`.z` 三个分量。使用哪个分量，取决于数据是一维、二维还是三维。
+
+### 3.2 一维数据：把两个局部坐标接成一个全局索引
+
+在一维数据中，每个 Block 负责一段连续位置。Thread 的全局索引是：
 
 ```cpp
 int i = blockIdx.x * blockDim.x + threadIdx.x;
 ```
 
-例如，每个 Block 有 256 个 Thread。Block 0 的 Thread 0 得到 `i = 0`。Block 1 的 Thread 0 得到 `i = 256`。两个 Thread 的 `threadIdx.x` 都是 0；它们的 `blockIdx.x` 不同。
+可以分两步读这个公式：
 
-`threadIdx` 是 CUDA 提供的块内坐标。`i` 是程序计算的全局索引。同一 Warp 内的 Thread 执行相同的索引公式，但各自得到不同结果。[2]
+1. `blockIdx.x * blockDim.x`：找到当前 Block 负责的起点。
+2. `threadIdx.x`：找到 Thread 在这个 Block 内的偏移量。
+
+例如，每个 Block 有 256 个 Thread：
+
+- Block 0 的 Thread 0：`0 * 256 + 0 = 0`。
+- Block 1 的 Thread 0：`1 * 256 + 0 = 256`。
+
+两个 Thread 的 `threadIdx.x` 都是 0，但它们属于不同 Block，所以 `blockIdx.x` 不同。
 
 ![一维 Grid 中 Block 与 Thread 的索引](/img/user/AI/CUDA/img/07_index_1d.png)
 
 *图 5：`threadIdx.x` 在每个 Block 中重新从 0 开始。`blockIdx.x * blockDim.x` 给每个 Block 一个不同的起点。*
 
+这里没有把 `gridDim.x` 乘进公式，因为 `gridDim.x` 表示 **Block 的总数**，不是当前 Block 的起点。它用于描述 Grid 的范围和总工作量，而不是计算某个 Thread 在本 Block 外的偏移。
+
 ![gridDim 改变 Grid 的范围](/img/user/AI/CUDA/img/08_griddim_extent.png)
 
 *图 6：`gridDim.x` 决定有多少个 Block，因此决定这次启动覆盖多少个 Thread；它不改变已有 Thread 的索引。图中每个 Block 有 4 个 Thread。*
 
-对于二维数据，分别计算两个方向的坐标：
+### 3.3 二维数据：分别计算两个方向
+
+对于图像或矩阵，Thread 通常有两个坐标：
 
 ```cpp
 int x = blockIdx.x * blockDim.x + threadIdx.x;
 int y = blockIdx.y * blockDim.y + threadIdx.y;
 ```
 
+`x` 和 `y` 分别计算，不需要把 `gridDim` 直接放进这两个坐标公式。`gridDim` 仍然规定 Grid 在两个方向上有多大。
+
 ![二维 Grid 中的 Thread 坐标](/img/user/AI/CUDA/img/09_index_2d.png)
 
 *图 7：`gridDim` 给出两个方向上的 Block 数。`x`、`y` 由各方向的 `blockIdx`、`blockDim` 和 `threadIdx` 计算。*
 
-这些公式用来确定单个 Thread 的位置。`gridDim` 用来确定 Grid 的范围，也可用于计算总线程数。若要把二维坐标压成一维索引，还需要用到行宽；行宽可能由 `gridDim.x * blockDim.x` 得到，具体取决于数据布局。[2]
+如果数据在内存中是一条线，还可以把 `(x, y)` 再压成一维索引：
+
+```cpp
+int id = x + y * width;
+```
+
+这里的 `width` 是一行中有多少个元素。它属于数据布局，不一定等于 `gridDim.x`。
+
+### 3.4 三维数据：先定位 Block，再定位 Thread
+
+三维 Grid 可以先看成多层二维网格：`z` 表示第几层；每一层内部再用 `x` 和 `y` 定位 Block。
+
+![三维 Grid 的分层表示](/img/user/AI/CUDA/img/17_3d_layers_simple.png)
+
+*图 8：`gridDim = (2, 2, 3)` 表示 3 层，每层有 2×2 个 Block。*
+
+找到 Block 后，再在这个 Block 内定位 Thread。Block 内的 `z` 仍表示层，`x` 和 `y` 表示该层中的位置。
+
+![先定位 Block，再定位 Thread](/img/user/AI/CUDA/img/18_nested_index_simple.png)
+
+*图 9：先得到 `block_id = 9`，再得到 `thread_offset = 5`，最后计算 `id = 9 × 8 + 5 = 77`。*
+
+如果确实需要把三维坐标压成一个一维编号，可以明确写出两级展平：
+
+```cpp
+int block_id = blockIdx.x
+             + blockIdx.y * gridDim.x
+             + blockIdx.z * gridDim.x * gridDim.y;
+
+int thread_offset = threadIdx.x
+                  + threadIdx.y * blockDim.x
+                  + threadIdx.z * blockDim.x * blockDim.y;
+
+int threads_per_block = blockDim.x * blockDim.y * blockDim.z;
+int id = block_id * threads_per_block + thread_offset;
+```
+
+这段代码采用“`x` 方向变化最快，`z` 方向变化最慢”的顺序。它先计算当前 Block 是整个 Grid 中的第几个，再计算当前 Thread 是该 Block 内的第几个，最后把两者拼接起来。
+
+### 3.5 一句话记忆
+
+> **`threadIdx` 找 Block 内的位置，`blockIdx` 找 Grid 内的 Block；`blockDim` 和 `gridDim` 告诉程序每一级有多大。**
 
 ## 4. Warp 怎样执行 Thread
 
@@ -135,21 +198,21 @@ NVIDIA GPU 将同一 Block 的 Thread 按 32 个一组组成 Warp。一个有 25
 
 ![五种 CUDA 存储空间的访问范围](/img/user/AI/CUDA/img/04_memory_scope.png)
 
-*图 8：寄存器和局部内存对 Thread 私有。共享内存由同一 Block 的 Thread 共用。*
+*图 10：寄存器和局部内存对 Thread 私有。共享内存由同一 Block 的 Thread 共用。*
 
 **硬件中的存放位置：**
 
 ![五种 CUDA 存储空间的物理位置示意](/img/user/AI/CUDA/img/05_memory_physical.png)
 
-*图 9：共享内存按 Block 分配，但使用 SM 的物理资源。局部内存对 Thread 私有，但其数据通常在设备内存。*
+*图 11：共享内存按 Block 分配，但使用 SM 的物理资源。局部内存对 Thread 私有，但其数据通常在设备内存。*
 
 **一次块内复用的例子：**
 
 ![CUDA 中全局内存、共享内存、寄存器、常量内存与局部内存的数据流](/img/user/AI/CUDA/img/06_memory_flow.png)
 
-*图 10：部分 Thread 从全局内存加载数据。块内 Thread 可以从共享内存重复读取。图中的共享内存路径不是每次计算的必经路径。*
+*图 12：部分 Thread 从全局内存加载数据。块内 Thread 可以从共享内存重复读取。图中的共享内存路径不是每次计算的必经路径。*
 
-图 8 表示谁能访问数据。图 9 表示物理资源的位置。两个视角不能混为一谈。[1][2]
+图 10 表示谁能访问数据。图 11 表示物理资源的位置。两个视角不能混为一谈。[1][2]
 
 ## 6. Thread 怎样协作
 

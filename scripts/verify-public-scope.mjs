@@ -4,8 +4,9 @@ import path from "node:path";
 const roots = [
   ["src/site/notes", new Set(["notes.json", "notes.11tydata.js"])],
   ["src/site/img/user", new Set()],
+  ["src/site/assets", new Set()],
 ];
-const allowedPrefix = "AI/CUDA/";
+const allowedPrefixes = ["AI/CUDA/", "Leetcode&&算法/", "Java后端开发体系/"];
 
 for (const [root, allowedAtRoot] of roots) {
   if (!fs.existsSync(root)) continue;
@@ -19,12 +20,12 @@ for (const [root, allowedAtRoot] of roots) {
         continue;
       }
       const relative = path.relative(root, filename).split(path.sep).join("/");
-      if (relative === "AI/CUDA/.gitkeep" || allowedAtRoot.has(relative)) continue;
-      if (!relative.startsWith(allowedPrefix)) {
+      if (allowedAtRoot.has(relative) || relative.endsWith("/.gitkeep") || allowedPrefixes.some((prefix) => relative.startsWith(prefix))) continue;
+      if (!allowedPrefixes.some((prefix) => relative.startsWith(prefix))) {
         throw new Error(`Refusing to build: ${filename} is outside /AI/CUDA`);
       }
     }
   }
 }
 
-console.log("Public scope verified: /AI/CUDA only");
+console.log("Public scope verified: AI/CUDA, Leetcode&&算法, Java后端开发体系");
